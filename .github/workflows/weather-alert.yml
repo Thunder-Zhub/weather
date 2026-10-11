@@ -46,7 +46,7 @@ jobs:
 
       - name: Check weather and notify Discord
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TEST_DISCORD: ${{ inputs.test_discord && '1' || '' }}
           # Optional: set these under Settings → Secrets and variables → Actions → Variables
           ALERT_STATUSES: ${{ vars.ALERT_STATUSES }}     # default: flood,heat,rain  (add ",cold" to include cold)
