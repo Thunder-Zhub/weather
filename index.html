@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thailand Weather Alert</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌦️</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg:#0a0e14;--panel:#121821;--panel2:#1a212c;--border:#273040;--text:#e6edf3;--muted:#8b949e;--accent:#5eb3ff;
+        --ok:#3fb950;--rain:#4493f8;--flood:#f85149;--heat:#db6d28;--cold:#7cc4ff;--na:#6e7681}
+  body{font-family:'Prompt','Noto Sans Thai','Segoe UI',Tahoma,sans-serif;color:var(--text);min-height:100vh;
+       background:radial-gradient(1100px 600px at 85% -10%,#16294a66,transparent),radial-gradient(900px 500px at -10% 15%,#0e3b3a55,transparent),var(--bg);background-attachment:fixed}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 20px;background:rgba(18,24,33,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1000}
+  header h1{font-size:1.15rem;font-weight:700} header h1 small{color:var(--muted);font-weight:400;margin-left:8px;font-size:.78rem}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+  button.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:7px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+  button.btn:hover{border-color:var(--accent)} button.btn:disabled{opacity:.5;cursor:wait}
+  main{max-width:1280px;margin:0 auto;padding:16px 20px 40px}
+  #floodBanner{display:none;margin-bottom:14px;padding:12px 16px;border:1px solid var(--flood);border-left-width:6px;border-radius:12px;background:rgba(248,81,73,.12);font-weight:600;line-height:1.6}
+  #floodBanner.show{display:block}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.cards .card:last-child{grid-column:span 2}}
+  .card{position:relative;overflow:hidden;text-align:left;font:inherit;color:inherit;cursor:pointer;background:linear-gradient(180deg,var(--panel),#0e131b);border:1px solid var(--border);border-radius:16px;padding:14px 16px 14px 20px;box-shadow:0 8px 24px rgba(0,0,0,.3);transition:transform .15s,border-color .15s}
+  .card:hover{transform:translateY(-2px)} .card.on{border-color:var(--c)}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}
+  .card .num{font-size:2.1rem;font-weight:700;color:var(--c);line-height:1.1}
+  .card .lbl{font-size:.8rem;color:var(--muted);margin-top:2px} .card .lbl b{color:var(--text);font-weight:600}
+  .layout{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+  .panel{background:linear-gradient(180deg,var(--panel),#0e131b);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  #map{height:620px;border-radius:16px 16px 0 0;background:#070b10}
+  @media(max-width:600px){#map{height:420px}main{padding:12px}}
+  .mapbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:10px 14px;font-size:.8rem;color:var(--muted)}
+  .mapbar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+  .mapbar input[type=range]{width:90px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-left:auto}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .side{padding:14px} .side h2{font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .badge{display:inline-block;padding:1px 9px;border-radius:999px;font-size:.72rem;font-weight:700;color:#fff;background:var(--na)}
+  .list{max-height:640px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+  .item{border:1px solid var(--border);border-left:4px solid var(--c,var(--na));border-radius:10px;padding:9px 12px;background:var(--panel2);font-size:.86rem;cursor:pointer;text-align:left;color:inherit;font-family:inherit}
+  .item:hover{border-color:var(--c)} .item .t{font-weight:600} .item .d{color:var(--muted);margin-top:2px;font-size:.8rem}
+  #info{color:var(--muted);font-size:.78rem;margin-top:14px;text-align:center;line-height:1.7}
+  .flood-mark b{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--flood);color:#fff;font-size:15px;border:2px solid #fff;animation:ping 1.4s infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(248,81,73,.75)}70%,100%{box-shadow:0 0 0 14px rgba(248,81,73,0)}}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--text)}
+  .leaflet-popup-content{font-family:inherit;line-height:1.5}
+  .leaflet-control-attribution{background:rgba(10,14,20,.75)!important;color:var(--muted)!important}
+  .leaflet-control-attribution a{color:var(--accent)!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌦️ Thailand Weather Alert <small>Open-Meteo + RainViewer radar</small></h1>
+  <div class="controls"><span id="countdown"></span><button class="btn" id="btnRefresh">🔄 รีเฟรช</button></div>
+</header>
+
+<main>
+  <div id="floodBanner" role="alert"></div>
+
+  <div class="cards" id="cards">
+    <button class="card" data-st="ok"    style="--c:var(--ok)">   <div class="num" id="cnt-ok">–</div>   <div class="lbl"><b>😊 ปกติ</b> · Normal</div></button>
+    <button class="card" data-st="rain"  style="--c:var(--rain)"> <div class="num" id="cnt-rain">–</div> <div class="lbl"><b>🌧️ ฝนตก</b> · Rain</div></button>
+    <button class="card" data-st="flood" style="--c:var(--flood)"><div class="num" id="cnt-flood">–</div><div class="lbl"><b>🌊 เสี่ยงน้ำท่วม</b> · Flood risk</div></button>
+    <button class="card" data-st="heat"  style="--c:var(--heat)"> <div class="num" id="cnt-heat">–</div> <div class="lbl"><b>🔥 ร้อนจัด</b> · Extreme heat</div></button>
+    <button class="card" data-st="cold"  style="--c:var(--cold)"> <div class="num" id="cnt-cold">–</div> <div class="lbl"><b>❄️ หนาว</b> · Cold</div></button>
+  </div>
+
+  <div class="layout">
+    <section class="panel">
+      <div id="map"></div>
+      <div class="mapbar">
+        <label><input type="checkbox" id="radarOn" checked> 📡 เรดาร์ฝน</label>
+        <button class="btn" id="radarPlay" style="padding:3px 10px">▶ เล่น</button>
+        <span id="radarTime">–</span>
+        <label>ความโปร่งใส <input type="range" id="radarOpacity" min="0.2" max="1" step="0.05" value="0.65"></label>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--ok)"></i>ปกติ</span><span><i class="dot" style="background:var(--rain)"></i>ฝน</span>
+          <span><i class="dot" style="background:var(--flood)"></i>น้ำท่วม</span><span><i class="dot" style="background:var(--heat)"></i>ร้อนจัด</span>
+          <span><i class="dot" style="background:var(--cold)"></i>หนาว</span><span><i class="dot" style="background:var(--na)"></i>ไม่มีข้อมูล</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel side">
+      <h2>🚨 <span id="listTitle">จังหวัดที่มีการแจ้งเตือน</span> <span class="badge" id="listCount">0</span></h2>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+
+  <div id="info"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ════════════════ CONFIG — keep identical to scripts/check-weather.mjs so dashboard = Discord alerts ════════════════
+const CFG = { heatIndexC: 40, coldC: 16, radarMinPixels: 3, refreshMs: 15 * 60 * 1000 };
+const PROVINCES = [{"name":"กรุงเทพมหานคร","lat":13.7563,"lon":100.5018},{"name":"สมุทรปราการ","lat":13.5955,"lon":100.576},{"name":"นนทบุรี","lat":13.859,"lon":100.521},{"name":"ปทุมธานี","lat":14.011,"lon":100.527},{"name":"พระนครศรีอยุธยา","lat":14.3532,"lon":100.5776},{"name":"อ่างทอง","lat":14.5896,"lon":100.4587},{"name":"ลพบุรี","lat":14.7995,"lon":100.6534},{"name":"สิงห์บุรี","lat":14.7138,"lon":100.4048},{"name":"ชัยนาท","lat":15.2063,"lon":100.133},{"name":"สระบุรี","lat":14.528,"lon":100.91},{"name":"ชลบุรี","lat":12.997,"lon":101.017},{"name":"ระยอง","lat":12.646,"lon":101.369},{"name":"จันทบุรี","lat":12.483,"lon":101.988},{"name":"ตราด","lat":12.242,"lon":102.508},{"name":"ฉะเชิงเทรา","lat":13.69,"lon":101.367},{"name":"ปราจีนบุรี","lat":14.047,"lon":101.372},{"name":"นครนายก","lat":14.206,"lon":101.213},{"name":"สระแก้ว","lat":13.824,"lon":102.065},{"name":"นครสวรรค์","lat":15.693,"lon":100.133},{"name":"อุทัยธานี","lat":15.383,"lon":100.025},{"name":"พิจิตร","lat":16.431,"lon":100.349},{"name":"พิษณุโลก","lat":16.821,"lon":100.265},{"name":"เพชรบูรณ์","lat":16.934,"lon":101.241},{"name":"สุพรรณบุรี","lat":14.475,"lon":100.118},{"name":"นครปฐม","lat":13.816,"lon":100.06},{"name":"ราชบุรี","lat":13.528,"lon":99.813},{"name":"กาญจนบุรี","lat":14.023,"lon":99.528},{"name":"เลย","lat":17.486,"lon":101.722},{"name":"หนองบัวลำภู","lat":17.209,"lon":102.432},{"name":"อุดรธานี","lat":17.415,"lon":102.786},{"name":"หนองคาย","lat":17.878,"lon":102.742},{"name":"บึงกาฬ","lat":18.359,"lon":103.644},{"name":"สกลนคร","lat":17.162,"lon":104.147},{"name":"นครพนม","lat":17.391,"lon":104.78},{"name":"มุกดาหาร","lat":16.543,"lon":104.72},{"name":"ขอนแก่น","lat":16.4419,"lon":102.836},{"name":"ชัยภูมิ","lat":15.807,"lon":102.032},{"name":"มหาสารคาม","lat":16.186,"lon":103.302},{"name":"ร้อยเอ็ด","lat":16.054,"lon":103.653},{"name":"ยโสธร","lat":15.794,"lon":104.146},{"name":"อุบลราชธานี","lat":15.229,"lon":104.856},{"name":"สุรินทร์","lat":14.883,"lon":103.494},{"name":"ศรีสะเกษ","lat":14.885,"lon":104.8},{"name":"บุรีรัมย์","lat":14.995,"lon":103.103},{"name":"อำนาจเจริญ","lat":15.887,"lon":104.635},{"name":"กาฬสินธุ์","lat":16.433,"lon":103.504},{"name":"เชียงใหม่","lat":18.79,"lon":98.981},{"name":"เชียงราย","lat":19.907,"lon":99.831},{"name":"ลำพูน","lat":18.576,"lon":99.028},{"name":"ลำปาง","lat":18.289,"lon":99.493},{"name":"แพร่","lat":19.39,"lon":100.165},{"name":"น่าน","lat":18.784,"lon":100.784},{"name":"พะเยา","lat":19.166,"lon":99.886},{"name":"แม่ฮ่องสอน","lat":19.301,"lon":97.968},{"name":"ตาก","lat":16.884,"lon":99.125},{"name":"สุโขทัย","lat":17.006,"lon":99.823},{"name":"อุตรดิตถ์","lat":17.621,"lon":100.096},{"name":"นครราชสีมา","lat":14.9799,"lon":102.0976},{"name":"กำแพงเพชร","lat":16.483,"lon":99.524},{"name":"นครศรีธรรมราช","lat":8.412,"lon":99.966},{"name":"กระบี่","lat":8.362,"lon":98.787},{"name":"พังงา","lat":8.422,"lon":98.525},{"name":"ภูเก็ต","lat":7.881,"lon":98.392},{"name":"สุราษฎร์ธานี","lat":9.133,"lon":99.333},{"name":"ชุมพร","lat":10.493,"lon":99.18},{"name":"ระนอง","lat":9.953,"lon":98.608},{"name":"สตูล","lat":6.624,"lon":100.063},{"name":"ตรัง","lat":7.559,"lon":99.611},{"name":"พัทลุง","lat":7.617,"lon":100.078},{"name":"สงขลา","lat":7.199,"lon":100.595},{"name":"ยะลา","lat":6.541,"lon":101.282},{"name":"ปัตตานี","lat":6.876,"lon":101.25},{"name":"นราธิวาส","lat":6.426,"lon":101.823},{"name":"สมุทรสาคร","lat":13.548,"lon":100.274},{"name":"สมุทรสงคราม","lat":13.396,"lon":100.003},{"name":"เพชรบุรี","lat":12.944,"lon":99.948},{"name":"ประจวบคีรีขันธ์","lat":11.812,"lon":99.796}];
+
+const ST = {
+  ok:    { label: 'ปกติ',          icon: '😊', color: '#3fb950' },
+  rain:  { label: 'ฝนตก',          icon: '🌧️', color: '#4493f8' },
+  flood: { label: 'เสี่ยงน้ำท่วม', icon: '🌊', color: '#f85149' },
+  heat:  { label: 'ร้อนจัด',       icon: '🔥', color: '#db6d28' },
+  cold:  { label: 'หนาว',          icon: '❄️', color: '#7cc4ff' },
+  na:    { label: 'ไม่มีข้อมูล',   icon: '❔', color: '#6e7681' },
+};
+const SEV = { flood: 4, heat: 3, rain: 2, cold: 1.5, ok: 1, na: 0 };
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const hhmm = ms => new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+
+// ════════════════ Rules (same as the Node script) ════════════════
+function floodFlags(w) {
+  const f = [], r6 = w.rain6h, r24 = w.rain24h, r72 = w.rain72h, mx = w.rainMax6;
+  if (w.rain >= 15) f.push(`ฝนหนักมากตอนนี้ ${w.rain.toFixed(1)} มม./ชม.`);
+  if (w.rain3h >= 30) f.push(`คาดฝน 3 ชม. ${w.rain3h.toFixed(0)} มม.`);
+  if (r6 >= 50 || mx >= 20) f.push(`คาดฝน 6 ชม. ${r6.toFixed(0)} มม. (สูงสุด ${mx.toFixed(0)} มม./ชม.)`);
+  if (r24 >= 90 || (r24 >= 60 && r6 >= 20)) f.push(`ฝนสะสม 24 ชม. ${r24.toFixed(0)} มม.`);
+  if (r72 >= 150) f.push(`ฝนสะสม 72 ชม. ${r72.toFixed(0)} มม.`);
+  return f;
+}
+function classify(w, echo) {
+  if (floodFlags(w).length) return 'flood';
+  if (w.feels >= CFG.heatIndexC) return 'heat';
+  if (w.rain >= 0.5 || w.rain3h >= 5 || echo === true) return 'rain';
+  if (w.temp <= CFG.coldC) return 'cold';
+  return 'ok';
+}
+function detail(d) {
+  const w = d.w; if (!w) return 'โหลดข้อมูลไม่ได้';
+  if (d.st === 'flood') return floodFlags(w).join(' • ');
+  if (d.st === 'heat') return `รู้สึกร้อน ${w.feels.toFixed(1)}°C (อุณหภูมิ ${w.temp.toFixed(1)}°C)`;
+  if (d.st === 'cold') return `${w.temp.toFixed(1)}°C`;
+  if (d.st === 'rain') return w.rain >= 0.5 ? `ฝน ${w.rain.toFixed(1)} มม./ชม.${d.echo ? ' • 📡 เรดาร์ยืนยัน' : ''}`
+    : w.rain3h >= 5 ? `คาดฝน 3 ชม. ${w.rain3h.toFixed(1)} มม.` : '📡 เรดาร์พบกลุ่มฝนใกล้จังหวัด';
+  return `${w.temp.toFixed(1)}°C • รู้สึก ${w.feels.toFixed(1)}°C`;
+}
+
+// ════════════════ Data: Open-Meteo ════════════════
+const OM = 'https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperature,precipitation&hourly=precipitation&past_days=3&forecast_days=2&timezone=Asia%2FBangkok';
+async function getJSON(url, tries = 3) {
+  let err;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (r.ok) return await r.json();
+      err = new Error('HTTP ' + r.status); if (r.status !== 429 && r.status < 500) break;
+    } catch (e) { err = e; }
+    if (i < tries - 1) await sleep(1200 * 2 ** i);
+  }
+  throw err;
+}
+function parseOM(j) {
+  const c = j && j.current, h = j && j.hourly;
+  if (!c || c.temperature_2m == null || !h || !h.time) return null;
+  let i0 = h.time.findIndex(t => t >= c.time.slice(0, 13) + ':00'); if (i0 < 0) i0 = 0;
+  const P = h.precipitation || [], sum = (a, b) => P.slice(Math.max(0, a), Math.max(0, b)).reduce((s, x) => s + (x || 0), 0);
+  return { temp: c.temperature_2m, feels: c.apparent_temperature ?? c.temperature_2m, rain: c.precipitation ?? 0,
+    rain3h: sum(i0 + 1, i0 + 4), rain6h: sum(i0 + 1, i0 + 7), rain24h: sum(i0 - 23, i0 + 1), rain72h: sum(i0 - 71, i0 + 1),
+    rainMax6: Math.max(0, ...P.slice(i0 + 1, i0 + 7).map(x => x || 0)) };
+}
+async function fetchWeather() {
+  const out = new Map(), chunks = [];
+  for (let i = 0; i < PROVINCES.length; i += 20) chunks.push(PROVINCES.slice(i, i + 20));
+  const res = await Promise.allSettled(chunks.map(ch => getJSON(`${OM}&latitude=${ch.map(p => p.lat).join(',')}&longitude=${ch.map(p => p.lon).join(',')}`)));
+  res.forEach((r, ci) => { if (r.status !== 'fulfilled') return;
+    const arr = Array.isArray(r.value) ? r.value : [r.value];
+    chunks[ci].forEach((p, k) => { try { const w = parseOM(arr[k]); if (w) out.set(p.name, w); } catch {} }); });
+  if (!out.size) throw new Error('ไม่สามารถดึงข้อมูลจาก Open-Meteo ได้');
+  return out;
+}
+
+// ════════════════ Data: RainViewer ════════════════
+let radar = { host: '', frames: [], layer: null, idx: -1, timer: null };
+function tileOf(lat, lon, z = 7, size = 256) {
+  const n = 2 ** z, fx = (lon + 180) / 360 * n, fy = (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+  const x = Math.floor(fx), y = Math.floor(fy);
+  return { x, y, px: Math.min(size - 1, Math.floor((fx - x) * size)), py: Math.min(size - 1, Math.floor((fy - y) * size)) };
+}
+const frameUrl = f => `${radar.host}${f.path}/256/{z}/{x}/{y}/2/1_0.png`;
+async function loadRadarMeta() {
+  const m = await getJSON('https://api.rainviewer.com/public/weather-maps.json', 2);
+  radar.host = m.host; radar.frames = (m.radar && m.radar.past) || [];
+  if (!radar.frames.length) throw new Error('no radar frames');
+  return m;
+}
+// Live echo test: load the z7 tiles covering Thailand into a canvas and check pixels around each province.
+// Needs CORS on tile images — if the browser blocks pixel reads, we silently fall back to Open-Meteo only.
+async function radarEcho() {
+  const echo = new Map();
+  try {
+    const f = radar.frames.at(-1);
+    if (!f || Date.now() / 1000 - f.time > 40 * 60) return echo;
+    const tiles = new Map();
+    const load = (x, y) => new Promise(res => {
+      const im = new Image(); im.crossOrigin = 'anonymous';
+      im.onload = () => { try { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+        res(g.getImageData(0, 0, 256, 256).data); } catch { res(null); } };
+      im.onerror = () => res(null);
+      im.src = `${radar.host}${f.path}/256/7/${x}/${y}/2/0_0.png`;
+    });
+    const todo = [];
+    for (const p of PROVINCES) { const t = tileOf(p.lat, p.lon), k = t.x + '/' + t.y; if (!tiles.has(k)) tiles.set(k, load(t.x, t.y)); todo.push([p, t, k]); }
+    for (const [p, t, k] of todo) {
+      const data = await tiles.get(k); if (!data) continue;
+      let hits = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const x = t.px + dx, y = t.py + dy;
+        if (x >= 0 && y >= 0 && x < 256 && y < 256 && data[(y * 256 + x) * 4 + 3] > 0) hits++;
+      }
+      echo.set(p.name, hits >= CFG.radarMinPixels);
+    }
+  } catch (e) { console.warn('radar echo check skipped', e); }
+  return echo;
+}
+
+// ════════════════ Map ════════════════
+let map, markers = new Map(), floodMarks = new Map(), results = new Map(), filter = '';
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([13.2, 100.9], 6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO • Radar: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a> • Weather: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>' }).addTo(map);
+  for (const p of PROVINCES) {
+    const m = L.circleMarker([p.lat, p.lon], { radius: 6, weight: 1.5, color: '#0a0e14', fillColor: ST.na.color, fillOpacity: .95 }).addTo(map);
+    m.bindTooltip(p.name); markers.set(p.name, m);
+  }
+  setTimeout(() => map.invalidateSize(), 300);
+}
+function setRadarFrame(i) {
+  const f = radar.frames[i]; if (!f) return;
+  radar.idx = i;
+  const url = frameUrl(f);
+  if (!radar.layer) {
+    radar.layer = L.tileLayer(url, { tileSize: 256, maxNativeZoom: 7, maxZoom: 19, opacity: +$('radarOpacity').value, zIndex: 300 });
+    if ($('radarOn').checked) radar.layer.addTo(map);
+  } else radar.layer.setUrl(url);
+  $('radarTime').textContent = `เรดาร์ ${hhmm(f.time * 1000)} น.${i === radar.frames.length - 1 ? ' (ล่าสุด)' : ''}`;
+}
+function initRadarUI() {
+  $('radarOn').onchange = e => { if (!radar.layer) return; e.target.checked ? radar.layer.addTo(map) : map.removeLayer(radar.layer); };
+  $('radarOpacity').oninput = e => radar.layer && radar.layer.setOpacity(+e.target.value);
+  $('radarPlay').onclick = () => {
+    if (radar.timer) { clearInterval(radar.timer); radar.timer = null; $('radarPlay').textContent = '▶ เล่น'; setRadarFrame(radar.frames.length - 1); return; }
+    $('radarPlay').textContent = '⏸ หยุด';
+    if (!$('radarOn').checked) { $('radarOn').checked = true; radar.layer && radar.layer.addTo(map); }
+    let i = 0; setRadarFrame(i);
+    radar.timer = setInterval(() => { i = (i + 1) % radar.frames.length; setRadarFrame(i); }, 700);
+  };
+}
+
+// ════════════════ Render ════════════════
+function render() {
+  const counts = { ok: 0, rain: 0, flood: 0, heat: 0, cold: 0, na: 0 }, active = [], floods = [];
+  for (const p of PROVINCES) {
+    const d = results.get(p.name) || { st: 'na' }; counts[d.st]++;
+    const m = markers.get(p.name);
+    if (m) {
+      m.setStyle({ fillColor: ST[d.st].color, radius: d.st === 'ok' || d.st === 'na' ? 6 : 8 });
+      m.bindPopup(`<b>${d.st === 'flood' ? '❗ ' : ''}${esc(p.name)}</b><br>${ST[d.st].icon} ${ST[d.st].label}<br>${esc(detail(d))}`);
+    }
+    if (d.st !== 'ok' && d.st !== 'na') active.push({ p, d });
+    if (d.st === 'flood') floods.push(p.name);
+  }
+  for (const k of ['ok', 'rain', 'flood', 'heat', 'cold']) $('cnt-' + k).textContent = counts[k];
+  document.querySelectorAll('.card').forEach(c => c.classList.toggle('on', c.dataset.st === filter));
+
+  const fb = $('floodBanner');
+  fb.classList.toggle('show', floods.length > 0);
+  fb.innerHTML = floods.length ? `<span style="color:var(--flood);font-size:1.3rem;font-weight:800;margin-right:6px">❗</span>เสี่ยงน้ำท่วม ${floods.length} จังหวัด: ${floods.map(esc).join(' • ')}` : '';
+  document.title = (floods.length ? `❗(${floods.length}) ` : '') + 'Thailand Weather Alert';
+
+  for (const [n, mk] of floodMarks) if (!floods.includes(n)) { map.removeLayer(mk); floodMarks.delete(n); }
+  for (const n of floods) if (!floodMarks.has(n)) {
+    const p = PROVINCES.find(x => x.name === n);
+    floodMarks.set(n, L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'flood-mark', html: '<b>!</b>', iconSize: [24, 24], iconAnchor: [12, 12] }), zIndexOffset: 1000, title: n }).addTo(map));
+  }
+
+  let rows = filter ? PROVINCES.map(p => ({ p, d: results.get(p.name) || { st: 'na' } })).filter(r => r.d.st === filter) : active;
+  rows.sort((a, b) => (SEV[b.d.st] - SEV[a.d.st]) || a.p.name.localeCompare(b.p.name, 'th'));
+  $('listTitle').textContent = filter ? `${ST[filter].icon} ${ST[filter].label}` : 'จังหวัดที่มีการแจ้งเตือน';
+  $('listCount').textContent = rows.length;
+  $('list').innerHTML = rows.length ? rows.map(r => `<button class="item" style="--c:${ST[r.d.st].color}" data-n="${esc(r.p.name)}"><div class="t">${r.d.st === 'flood' ? '❗ ' : ''}${ST[r.d.st].icon} ${esc(r.p.name)} — ${ST[r.d.st].label}</div><div class="d">${esc(detail(r.d))}</div></button>`).join('')
+    : '<div style="color:var(--muted);font-size:.85rem">✅ ไม่มีพื้นที่เสี่ยงตอนนี้ — ทุกจังหวัดปกติ</div>';
+}
+
+// ════════════════ Refresh loop ════════════════
+let loading = false, nextAt = Date.now() + CFG.refreshMs, lastOk = 0;
+const QTR = 15 * 60 * 1000, nextTick = () => (Math.floor((Date.now() - 60e3) / QTR) + 1) * QTR + 60e3; // 1 min after Open-Meteo's 15-min update
+async function refresh() {
+  if (loading) return; loading = true; $('btnRefresh').disabled = true;
+  try {
+    const [w, echo] = await Promise.all([fetchWeather(), loadRadarMeta().then(() => { setRadarFrame(radar.frames.length - 1); return radarEcho(); }).catch(e => { console.warn('RainViewer unavailable:', e.message); return new Map(); })]);
+    results = new Map();
+    for (const p of PROVINCES) { const x = w.get(p.name); results.set(p.name, x ? { w: x, echo: echo.get(p.name), st: classify(x, echo.get(p.name)) } : { st: 'na' }); }
+    lastOk = Date.now(); nextAt = nextTick(); render();
+    $('info').innerHTML = `อัปเดตล่าสุด ${hhmm(lastOk)} น. • ${w.size}/${PROVINCES.length} จังหวัด • เรดาร์ ${echo.size ? 'ใช้งานได้' : 'ไม่พร้อมใช้งาน (ใช้ Open-Meteo อย่างเดียว)'}<br>เกณฑ์: ร้อนจัด ≥ ${CFG.heatIndexC}°C (feels-like) • หนาว ≤ ${CFG.coldC}°C • น้ำท่วม = ฝนสะสม/ฝนคาดการณ์สูง`;
+  } catch (e) {
+    nextAt = Date.now() + 60e3;
+    $('info').textContent = `⚠️ อัปเดตไม่สำเร็จ (${e.message}) — ลองใหม่ใน 1 นาที` + (lastOk ? ` • แสดงข้อมูลเดิมของ ${hhmm(lastOk)} น.` : '');
+  } finally { loading = false; $('btnRefresh').disabled = false; }
+}
+
+initMap(); initRadarUI(); render();
+$('btnRefresh').onclick = refresh;
+$('cards').onclick = e => { const c = e.target.closest('.card'); if (!c) return; filter = filter === c.dataset.st ? '' : c.dataset.st; render(); };
+$('list').onclick = e => { const b = e.target.closest('.item'); if (!b) return; const p = PROVINCES.find(x => x.name === b.dataset.n); map.flyTo([p.lat, p.lon], 9, { duration: .6 }); markers.get(p.name).openPopup(); };
+setInterval(() => {
+  const left = Math.max(0, Math.round((nextAt - Date.now()) / 1000));
+  $('countdown').textContent = loading ? 'กำลังอัปเดต…' : `⚡ อัปเดตอีก ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  if (!loading && Date.now() >= nextAt) refresh();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() >= nextAt) refresh(); });
+refresh();
+</script>
+</body>
+</html>

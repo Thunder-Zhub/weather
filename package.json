@@ -1,0 +1,12 @@
+{
+  "name": "thai-weather-alert-actions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Thailand weather monitor (Open-Meteo + RainViewer) -> Discord, run by GitHub Actions. Zero dependencies.",
+  "scripts": {
+    "check": "node scripts/check-weather.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
