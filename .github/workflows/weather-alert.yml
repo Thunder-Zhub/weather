@@ -1,1 +1,65 @@
 
+name: Weather Alert
+
+on:
+  schedule:
+    - cron: '3,18,33,48 * * * *'   # every 15 min (offset from :00 — GitHub is busiest on the hour)
+  workflow_dispatch:
+    inputs:
+      test_discord:
+        description: 'Only send a test message to Discord'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write   # lets the keep-alive step re-enable this workflow (see README)
+
+concurrency:
+  group: weather-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            package.json
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Alert state (which provinces are currently in an alert) survives between runs via the Actions cache.
+      # Each run saves a new entry (key has the run id) and restores the newest one (restore-keys prefix).
+      - name: Restore state
+        uses: actions/cache@v4
+        with:
+          path: .state
+          key: weather-state-${{ github.run_id }}
+          restore-keys: weather-state-
+
+      - name: Check weather and notify Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          TEST_DISCORD: ${{ inputs.test_discord && '1' || '' }}
+          # Optional: set these under Settings → Secrets and variables → Actions → Variables
+          ALERT_STATUSES: ${{ vars.ALERT_STATUSES }}     # default: flood,heat,rain  (add ",cold" to include cold)
+          HEAT_INDEX_C: ${{ vars.HEAT_INDEX_C }}         # default: 40
+          COLD_C: ${{ vars.COLD_C }}                     # default: 16
+          USE_RADAR: ${{ vars.USE_RADAR }}               # set to 0 to disable the RainViewer radar check
+          RADAR_MIN_PIXELS: ${{ vars.RADAR_MIN_PIXELS }} # default: 3
+        run: node scripts/check-weather.mjs
+
+      # Best-effort: GitHub disables scheduled workflows in repos with 60 days of no activity.
+      - name: Keep schedule alive
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable weather-alert.yml --repo "$GITHUB_REPOSITORY"
